@@ -1,0 +1,70 @@
+name: Lint & Validate
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint all shell scripts
+        run: |
+          echo "Running ShellCheck on all bash files..."
+          shellcheck \
+            --severity=warning \
+            --shell=bash \
+            --external-sources \
+            setup.sh \
+            lib/colors.sh \
+            lib/parallel.sh \
+            modules/*.sh
+          echo "✅ All scripts passed ShellCheck"
+
+      - name: Validate bash syntax
+        run: |
+          echo "Validating bash syntax..."
+          for f in setup.sh lib/*.sh modules/*.sh; do
+            bash -n "$f" && echo "  ✅ $f" || { echo "  ❌ $f"; exit 1; }
+          done
+
+      - name: Validate config file syntax
+        run: |
+          bash -n config/vm-config.env && echo "✅ Config syntax OK"
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Scanning for accidentally hardcoded secrets..."
+          ! grep -rn --include="*.sh" --include="*.env" \
+            -E '(password|secret|token|key)\s*=\s*"[^"]{8,}"' \
+            --exclude-dir=.git \
+            . | grep -v "example\|placeholder\|CHANGEME\|your-"
+          echo "✅ No hardcoded secrets found"
+
+  dry-run-check:
+    name: Dry Run (Ubuntu 22.04)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x setup.sh lib/*.sh modules/*.sh
+
+      - name: Run dry-run mode
+        run: |
+          sudo ./setup.sh \
+            --config config/vm-config.env \
+            --dry-run \
+            --yes
