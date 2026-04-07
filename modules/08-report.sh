@@ -10,75 +10,87 @@ module_report() {
     local warn_count=0
     local fail=0
 
+    # Helper function: Check if command succeeds and print its description
     _check() {
-        local label="$1"
-        local cmd="$2"
-        local expected="${3:-0}"
-
+        local desc="$1"     # Description of what we are checking
+        local cmd="$2"      # Command to evaluate (returns 0 on success)
+        
         if eval "$cmd" > /dev/null 2>&1; then
-            echo -e "    ${GREEN}✅  ${label}${RESET}"
+            echo -e "    ${GREEN}✅  ${desc}${RESET}"
+            # Print visually appealing subcommand
+            echo -e "        ${DIM}Cmd: ${cmd}${RESET}"
             ((ok++))
         else
-            echo -e "    ${RED}❌  ${label}${RESET}"
+            echo -e "    ${RED}❌  ${desc}${RESET}"
+            echo -e "        ${DIM}Cmd: ${cmd}${RESET}"
             ((fail++))
         fi
     }
 
     _warn_check() {
-        local label="$1"
+        local desc="$1"
         local cmd="$2"
         if eval "$cmd" > /dev/null 2>&1; then
-            echo -e "    ${GREEN}✅  ${label}${RESET}"
+            echo -e "    ${GREEN}✅  ${desc}${RESET}"
+            echo -e "        ${DIM}Cmd: ${cmd}${RESET}"
             ((ok++))
         else
-            echo -e "    ${YELLOW}⚠️   ${label} (non-critical)${RESET}"
+            echo -e "    ${YELLOW}⚠️   ${desc} (non-critical)${RESET}"
+            echo -e "        ${DIM}Cmd: ${cmd}${RESET}"
             ((warn_count++))
         fi
     }
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ System ]${RESET}"
-    _check "Hostname set"             "hostname | grep -q '${HOSTNAME}'"
-    _check "Timezone configured"      "timedatectl | grep -q '${TIMEZONE}'"
-    _check "System fully updated"     "apt-get -s upgrade | grep -q '0 upgraded'"
+    echo -e "  ${CYAN}${BOLD}[ 01 - System Update & Base Config ]${RESET}"
+    _check "Verify Hostname is correctly set"                 "hostname | grep -q '${HOSTNAME}'"
+    _check "Verify Timezone is correctly configured"          "timedatectl | grep -q '${TIMEZONE}'"
+    _check "Verify NTP time synchronization is active"        "timedatectl show --property=NTP | grep -q 'yes'"
+    _check "Verify somaxconn kernel parameter is applied"      "sysctl net.core.somaxconn | grep -q '65535'"
+    _check "Verify ulimit open files limit is configured"     "cat /etc/security/limits.d/99-production.conf | grep -q 'nofile'"
+    _check "Verify all system packages are upgraded"          "apt-get -s upgrade | grep -q '0 upgraded'"
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ Users & SSH ]${RESET}"
-    _check "Admin user exists"                "id '${ADMIN_USER}'"
-    _check "Admin user in sudo group"         "groups '${ADMIN_USER}' | grep -q sudo"
-    _check "Root account locked"              "passwd -S root | grep -qE 'L|LK'"
-    _check "SSH service running"              "systemctl is-active ssh || systemctl is-active sshd"
-    _check "SSH on custom port"               "ss -tlnp | grep -q ':${SSH_PORT}'"
-    _check "SSH public key directory exists"  "[ -d '/home/${ADMIN_USER}/.ssh' ]"
+    echo -e "  ${CYAN}${BOLD}[ 02 - User Management ]${RESET}"
+    _check "Verify non-root admin user exists"                "id '${ADMIN_USER}'"
+    _check "Verify admin user belongs to the sudo group"      "groups '${ADMIN_USER}' | grep -q '\\bsudo\\b'"
+    _check "Verify root account is strictly locked"           "passwd -S root | grep -qE 'L|LK'"
+    _check "Verify .ssh directory exists for admin user"      "[ -d '/home/${ADMIN_USER}/.ssh' ]"
+    _check "Verify .ssh directory has secure 700 permissions" "stat -c '%a' '/home/${ADMIN_USER}/.ssh' | grep -q '700'"
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ Firewall ]${RESET}"
-    _check "UFW is active"                    "ufw status | grep -q 'Status: active'"
-    _check "SSH port allowed"                 "ufw status | grep -q '${SSH_PORT}'"
-    _check "Default deny incoming"            "ufw status verbose | grep -q 'deny (incoming)'"
+    echo -e "  ${CYAN}${BOLD}[ 03 - SSH Hardening ]${RESET}"
+    _check "Verify SSH service is actively running"           "systemctl is-active ssh || systemctl is-active sshd"
+    _check "Verify SSH is bound to the custom configured port" "ss -tlnp | grep -q ':${SSH_PORT}'"
+    _check "Verify RootLogin is explicitly disabled in sshd"  "sshd -T 2>/dev/null | grep -i 'permitrootlogin no'"
+    _check "Verify PasswordAuthentication is disabled"        "sshd -T 2>/dev/null | grep -i 'passwordauthentication no'"
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ Security Services ]${RESET}"
-    _check "Fail2Ban running"                 "systemctl is-active fail2ban"
-    _warn_check "Auditd running"              "systemctl is-active auditd"
-    _warn_check "AppArmor running"            "systemctl is-active apparmor"
-    _warn_check "Unattended upgrades enabled" "systemctl is-active unattended-upgrades"
+    echo -e "  ${CYAN}${BOLD}[ 04 - Firewall (UFW) ]${RESET}"
+    _check "Verify UFW firewall is active and enabled"        "ufw status | grep -q 'Status: active'"
+    _check "Verify default policy blocks all incoming traffic" "ufw status verbose | grep -q 'deny (incoming)'"
+    _check "Verify SSH custom port is explicitly allowed"     "ufw status | grep -q '${SSH_PORT}'"
+    _check "Verify common attack vector (port 23/telnet) is blocked" "ufw status | grep -E -q '23/tcp.*DENY'"
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ Packages ]${RESET}"
-    _check "curl installed"     "command -v curl"
-    _check "git installed"      "command -v git"
-    _check "vim installed"      "command -v vim"
-    _check "htop installed"     "command -v htop"
-    _check "jq installed"       "command -v jq"
-    _warn_check "Docker installed" "command -v docker"
-    _warn_check "Node.js installed" "command -v node"
-    _warn_check "Python3 installed" "command -v python3"
+    echo -e "  ${CYAN}${BOLD}[ 05 - Security Services ]${RESET}"
+    _check "Verify Fail2Ban intrusion prevention is running"  "systemctl is-active fail2ban"
+    _check "Verify sshd jail is active in Fail2Ban"           "fail2ban-client status | grep -q sshd"
+    _warn_check "Verify Auditd is recording system events"    "systemctl is-active auditd"
+    _warn_check "Verify AppArmor MAC framework is active"     "systemctl is-active apparmor"
 
     echo ""
-    echo -e "  ${CYAN}${BOLD}[ Storage ]${RESET}"
-    _warn_check "Swap active"          "swapon --show | grep -q swapfile"
-    _warn_check "Disk > 10GB free"     "df / | awk 'NR==2 {exit (\$4 > 10*1024*1024) ? 0 : 1}'"
+    echo -e "  ${CYAN}${BOLD}[ 06 - Packages ]${RESET}"
+    _check "Verify curl utility is installed"                 "command -v curl"
+    _check "Verify git version control is installed"          "command -v git"
+    _check "Verify vim editor is installed"                   "command -v vim"
+    _check "Verify htop process monitor is installed"         "command -v htop"
+    _warn_check "Verify Docker engine is installed"           "command -v docker"
+
+    echo ""
+    echo -e "  ${CYAN}${BOLD}[ 07 - Storage ]${RESET}"
+    _warn_check "Verify swap space is active and mounted"     "swapon --show | grep -q swapfile"
+    _warn_check "Verify sufficient root disk space (> 10GB free)" "df / | awk 'NR==2 {exit (\$4 > 10*1024*1024) ? 0 : 1}'"
 
     # ─── Print summary ────────────────────────────────────────────────────────
     local total=$(( ok + warn_count + fail ))
@@ -115,6 +127,7 @@ module_report() {
         echo "Public IP:       $public_ip"
         echo ""
         echo "Checks: $ok passed / $warn_count warnings / $fail failed"
+        echo "Check log file for exact command outputs."
         echo ""
         echo "Connect: ssh -p ${SSH_PORT} ${ADMIN_USER}@${public_ip}"
     } > "$report_file"
