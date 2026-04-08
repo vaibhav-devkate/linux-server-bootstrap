@@ -55,7 +55,9 @@ parallel_wait() {
         for id in "${!PARALLEL_JOBS[@]}"; do
             local status_file="$PARALLEL_STATUS_DIR/job_${id}.status"
             local status; status=$(cat "$status_file" 2>/dev/null || echo "RUNNING")
-            [[ "$status" != "RUNNING" ]] && ((done_count++))
+            if [[ "$status" != "RUNNING" ]]; then
+                done_count=$((done_count + 1))
+            fi
         done
 
         # Print progress bar
@@ -91,7 +93,7 @@ parallel_wait() {
             echo -e "    ${RED}❌  ${name}${RESET}"
             echo -e "    ${DIM}    Output:${RESET}"
             tail -5 "$output_file" 2>/dev/null | sed 's/^/        /'
-            ((failed++))
+            failed=$((failed + 1))
         fi
         wait "${PARALLEL_JOBS[$id]}" 2>/dev/null || true
     done
