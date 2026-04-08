@@ -75,21 +75,26 @@ _install_docker_engine() {
     # Remove old docker packages
     apt-get remove -y -qq docker docker-engine docker.io containerd runc 2>/dev/null || true
 
+    # Remove any existing, conflicting docker repo configurations
+    rm -f /etc/apt/sources.list.d/docker.list
+    rm -f /etc/apt/sources.list.d/docker.sources
+    rm -f /etc/apt/keyrings/docker.gpg
+    rm -f /etc/apt/keyrings/docker.asc
+
     # Add Docker GPG key and repo
     apt-get install -y -qq ca-certificates curl gnupg || return 1
 
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null || {
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc 2>/dev/null || {
         # Fallback: use distro package
         apt-get install -y -qq docker.io docker-compose-plugin
         return 0
     }
-    chmod a+r /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.asc
 
     local codename
     codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
 https://download.docker.com/linux/ubuntu ${codename} stable" \
         > /etc/apt/sources.list.d/docker.list
 
