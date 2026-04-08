@@ -4,7 +4,7 @@
 .PHONY: help setup dry-run check-only lint validate
 
 SHELL := /bin/bash
-CONFIG ?= config/vm-config.env
+CONFIG ?= config/config.env
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

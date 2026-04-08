@@ -13,6 +13,8 @@ module_install_packages() {
     parallel_init
 
     # ─── Build package groups based on config ─────────────────────────────────
+    # Why: Installing packages in separate groups helps modularize configurations. Using parallel logic speeds up provisioning drastically.
+    # What it does: Reads environment variables and adds corresponding apt install commands to a parallel executor queue.
     [[ -n "$GROUP_CORE" ]] && \
         parallel_add "Core utilities     ($GROUP_CORE)" \
             "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_CORE"
@@ -34,6 +36,8 @@ module_install_packages() {
             "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_DATABASE"
 
     # ─── Docker installation ──────────────────────────────────────────────────
+    # Why: Many modern applications are deployed via containers.
+    # What it does: Triggers a dedicated function to install the Docker Engine officially from Docker repositories.
     if [[ "$INSTALL_DOCKER" == true ]]; then
         parallel_add "Docker Engine" \
             "_install_docker_engine"
@@ -48,6 +52,8 @@ module_install_packages() {
     parallel_wait
 
     # ─── Post-install configuration ───────────────────────────────────────────
+    # Why: The default Docker daemon lacks required log rotation and safe-restart settings.
+    # What it does: Executes the configuration routines for Docker and installs NVM for the administrator.
     if [[ "$INSTALL_DOCKER" == true ]]; then
         _configure_docker
     fi
@@ -63,6 +69,8 @@ module_install_packages() {
 }
 
 # ─── Docker Engine Installer ──────────────────────────────────────────────────
+# Why: Standard repositories often have outdated Docker versions. Using official repos ensures access to the latest patched builds.
+# What it does: Removes legacy Docker packages, adds the HTTPS apt repository/GPG key, and installs the latest CLI/daemon.
 _install_docker_engine() {
     # Remove old docker packages
     apt-get remove -y -qq docker docker-engine docker.io containerd runc 2>/dev/null || true
@@ -91,6 +99,8 @@ https://download.docker.com/linux/ubuntu ${codename} stable" \
 }
 
 # ─── Docker post-install configuration ───────────────────────────────────────
+# Why: Production setups require bounded logging (to avoid filling up hard drives) and userless proxy rules for security.
+# What it does: Writes a custom /etc/docker/daemon.json, restarts Docker, and assigns the admin to the docker group.
 _configure_docker() {
     info "Configuring Docker daemon..."
 
@@ -131,6 +141,8 @@ DOCKERD
 }
 
 # ─── NVM Installation ─────────────────────────────────────────────────────────
+# Why: Provides developers/ops easy control over their Node.js versions without needing sudo privileges.
+# What it does: Pulls the standard NVM installation script securely to the user's home folder.
 _install_nvm() {
     if id "$ADMIN_USER" &>/dev/null; then
         info "Installing NVM for $ADMIN_USER..."

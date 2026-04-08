@@ -7,6 +7,8 @@ module_security() {
     section "SECURITY HARDENING"
 
     # ─── Fail2Ban ─────────────────────────────────────────────────────────────
+    # Why: Temporarily bans IP addresses making multiple failed login attempts.
+    # What it does: Creates a custom jail.local configuration to protect SSH and HTTP services.
     info "Configuring Fail2Ban..."
 
     cat > /etc/fail2ban/jail.local << FAIL2BAN
@@ -60,6 +62,8 @@ FAIL2BAN
     success "Fail2Ban configured and running (max retries: ${FAIL2BAN_MAX_RETRY}, ban: ${FAIL2BAN_BAN_TIME}s)"
 
     # ─── Auditd (audit logging) ───────────────────────────────────────────────
+    # Why: Essential for regulatory compliance (CIS) and tracking specific system modifications.
+    # What it does: Installs rule sets to log critical file changes, user sessions, and syscalls.
     info "Configuring auditd..."
     if systemctl is-active --quiet auditd 2>/dev/null || \
        systemctl enable auditd 2>/dev/null; then
@@ -132,6 +136,8 @@ AUDIT
     fi
 
     # ─── AppArmor ────────────────────────────────────────────────────────────
+    # Why: Mandatory Access Control (MAC) isolates applications, limiting the damage of single-service exploits.
+    # What it does: Enables the service and enforces all locally defined security profiles.
     info "Enabling AppArmor..."
     if command -v aa-enforce &>/dev/null; then
         systemctl enable apparmor 2>/dev/null || true
@@ -146,6 +152,8 @@ AUDIT
     fi
 
     # ─── Disable unused services ──────────────────────────────────────────────
+    # Why: Reducing the attack surface by stopping unneeded Daemons.
+    # What it does: Loops through a predefined list of vulnerable/unused services and disables/stops them.
     info "Disabling unused/insecure services..."
     local unsafe_services=(
         avahi-daemon
@@ -167,6 +175,8 @@ AUDIT
     success "Unused services disabled"
 
     # ─── Password policy ──────────────────────────────────────────────────────
+    # Why: Enforces rotation of local passwords, preventing indefinitely lived credentials.
+    # What it does: Updates PAM limits to set maximum password age to 90 days.
     info "Enforcing password policy (PAM)..."
     if command -v pam-auth-update &>/dev/null; then
         # Install libpam-pwquality if available
@@ -180,6 +190,8 @@ AUDIT
     success "Password aging policy set (max: 90 days)"
 
     # ─── Secure shared memory ─────────────────────────────────────────────────
+    # Why: Shared memory (/run/shm) can be used to execute malicious payloads if not secured.
+    # What it does: Mounts tmpfs to /run/shm with nodev, nosuid, and noexec parameters via /etc/fstab.
     info "Securing shared memory..."
     if ! grep -q 'tmpfs.*shm' /etc/fstab; then
         echo "tmpfs /run/shm tmpfs defaults,noexec,nosuid,nodev 0 0" >> /etc/fstab
@@ -187,6 +199,8 @@ AUDIT
     fi
 
     # ─── rkhunter setup ───────────────────────────────────────────────────────
+    # Why: Scans the system for rootkits, backdoors, and local exploits.
+    # What it does: Updates rkhunter signatures and schedules a silent daily cron check.
     if command -v rkhunter &>/dev/null; then
         info "Initializing rkhunter rootkit scanner..."
         rkhunter --update --nocolors > /dev/null 2>&1 || true
@@ -202,6 +216,8 @@ RKHUNTER
     fi
 
     # ─── Automatic security updates ───────────────────────────────────────────
+    # Why: Zero-day exploits can occur at any time; unattended updates close windows of vulnerability quickly.
+    # What it does: Installs and configures apt-listchanges/unattended-upgrades to automatically apply security patches.
     if [[ "$ENABLE_AUTO_UPDATES" == true ]]; then
         info "Enabling automatic security updates..."
         apt-get install -y -qq unattended-upgrades apt-listchanges

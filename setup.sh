@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
 #
-#   ██╗   ██╗███╗   ███╗    ███████╗███████╗████████╗██╗   ██╗██████╗
-#   ██║   ██║████╗ ████║    ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗
-#   ██║   ██║██╔████╔██║    ███████╗█████╗     ██║   ██║   ██║██████╔╝
-#   ╚██╗ ██╔╝██║╚██╔╝██║    ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝
-#    ╚████╔╝ ██║ ╚═╝ ██║    ███████║███████╗   ██║   ╚██████╔╝██║
-#     ╚═══╝  ╚═╝     ╚═╝    ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝
+#   ██████╗ ███████╗██████╗ ██╗   ██╗███████╗██████╗     ███████╗███████╗████████╗██╗   ██╗██████╗
+#  ██╔════╝ ██╔════╝██╔══██╗██║   ██║██╔════╝██╔══██╗    ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗
+#  ███████╗ █████╗  ██████╔╝██║   ██║█████╗  ██████╔╝    ███████╗█████╗     ██║   ██║   ██║██████╔╝
+#  ╚════██║ ██╔══╝  ██╔══██╗╚██╗ ██╔╝██╔══╝  ██╔══██╗    ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝
+#  ███████║ ███████╗██║  ██║ ╚████╔╝ ███████╗██║  ██║    ███████║███████╗   ██║   ╚██████╔╝██║
+#  ╚══════╝ ╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝    ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝
 #
-#   Production VM Setup Script — Parallel, Secure, Production-Ready
+#   Production Server Setup Script — Parallel, Secure, Production-Ready
 #   Author:  vm-setup
 #   Version: 2.0.0
 #
@@ -40,7 +40,7 @@ source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/parallel.sh"
 
 # ── Default options ───────────────────────────────────────────────────────────
-CONFIG_FILE="${SCRIPT_DIR}/config/vm-config.env"
+CONFIG_FILE="${SCRIPT_DIR}/config/config.env"
 SKIP_UPDATE=false
 SKIP_PACKAGES=false
 SKIP_SECURITY=false
@@ -75,7 +75,7 @@ _print_help() {
     echo -e "${BOLD}Usage:${RESET}  sudo ./setup.sh [OPTIONS]"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
-    echo "  --config <file>      Config file path (default: ./config/vm-config.env)"
+    echo "  --config <file>      Config file path (default: ./config/config.env)"
     echo "  --ssh-key <key>      SSH public key to add to admin user"
     echo "  --skip-update        Skip OS update step"
     echo "  --skip-packages      Skip package installation"
@@ -110,8 +110,21 @@ preflight() {
 
     # Load config file
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        fatal "Config file not found: $CONFIG_FILE\n  Copy config/vm-config.env and edit it"
+        fatal "Config file not found: $CONFIG_FILE\n  Copy config/config.env and edit it"
     fi
+
+    # Prompt user to edit the config file if not in AUTO_YES mode
+    if [[ "$AUTO_YES" == false ]]; then
+        echo -ne "${YELLOW}${BOLD}  Have you edited the config file at ${CONFIG_FILE}? [y/N]:${RESET} "
+        read -r edit_ans
+        if [[ ! "$edit_ans" =~ ^[Yy]$ ]]; then
+            info "Opening config file in editor..."
+            sleep 1
+            ${EDITOR:-nano} "$CONFIG_FILE" || fatal "Editor exited with error"
+            info "Config edited, continuing setup..."
+        fi
+    fi
+
     source "$CONFIG_FILE"
 
     # CLI overrides
@@ -228,36 +241,45 @@ main() {
 
     # ── Full setup sequence ───────────────────────────────────────────────────
 
-    # 1. System update (must be first)
+    # 1. System update (MUST run sequentially - holds dpkg locks)
     if [[ "$SKIP_UPDATE" == false ]]; then
         run_module "${modules_dir}/01-system-update.sh" "module_system_update"
     fi
 
-    # 2. Install packages (run early so tools are available)
+    # ── Simultaneous Tasks ────────────────────────────────────────────────────
+    # Start Storage/Swap preparation simultaneously in the background.
+    # Why: Does not rely on apt or network, so it can run alongside package installs.
+    info "Starting Storage & Swap configuration in background..."
+    ( run_module "${modules_dir}/07-storage.sh" "module_storage" ) &
+    STORAGE_PID=$!
+
+    # ── Sequential Tasks ──────────────────────────────────────────────────────
+    # 2. Install packages (MUST run sequentially - tools needed by 03,04,05)
     if [[ "$SKIP_PACKAGES" == false ]]; then
         run_module "${modules_dir}/06-install-packages.sh" "module_install_packages"
     fi
 
-    # 3. User management
+    # 3. User management (MUST run sequentially - required by SSH setup)
     run_module "${modules_dir}/02-user-management.sh" "module_user_management"
 
-    # 4. SSH hardening
+    # 4. SSH hardening (MUST run sequentially - depends on users, prevents lockdown)
     run_module "${modules_dir}/03-ssh-hardening.sh" "module_ssh_hardening"
 
-    # 5. Firewall
+    # 5. Firewall (MUST run sequentially - relies on packages)
     if [[ "$SKIP_FIREWALL" == false ]]; then
         run_module "${modules_dir}/04-firewall.sh" "module_firewall"
     fi
 
-    # 6. Security hardening
+    # 6. Security hardening (MUST run sequentially - relies on firewall/packages)
     if [[ "$SKIP_SECURITY" == false ]]; then
         run_module "${modules_dir}/05-security.sh" "module_security"
     fi
 
-    # 7. Storage / Swap
-    run_module "${modules_dir}/07-storage.sh" "module_storage"
+    # Wait for the background Storage task to finish
+    info "Waiting for simultaneous tasks to complete..."
+    wait $STORAGE_PID
 
-    # 8. Final report
+    # 8. Final report (MUST run sequentially - must be last to summarize)
     run_module "${modules_dir}/08-report.sh" "module_report"
 
     # ── Total elapsed time ────────────────────────────────────────────────────

@@ -7,17 +7,23 @@ module_ssh_hardening() {
     section "SSH HARDENING"
 
     # Backup original sshd_config
+    # Why: Ensures there is a fallback configuration to restore if the hardening process breaks SSH access.
+    # What it does: Creates a dated copy of the original sshd_config without overwriting existing backups.
     local sshd_config="/etc/ssh/sshd_config"
     cp -n "$sshd_config" "${sshd_config}.bak.$(date +%Y%m%d)" || true
     info "Original sshd_config backed up"
 
     # ─── Regenerate host keys (fresh VM) ─────────────────────────────────────
+    # Why: VMs generated from templates often share the same host keys. Regenerating them ensures the server has a unique cryptographic identity.
+    # What it does: Deletes existing ssh_host keys and generates new ones via ssh-keygen -A.
     info "Regenerating SSH host keys..."
     rm -f /etc/ssh/ssh_host_*
     ssh-keygen -A > /dev/null 2>&1
     success "Host keys regenerated"
 
     # ─── Write hardened sshd_config ───────────────────────────────────────────
+    # Why: The default SSH settings are often too permissive. Hardening restricts access to specific users, modern ciphers, and key-based authentication.
+    # What it does: Replaces the sshd_config file completely with a secure, custom configuration.
     info "Writing hardened SSH configuration (port: ${SSH_PORT})..."
     cat > "$sshd_config" << SSHD
 # =============================================================================
@@ -82,6 +88,8 @@ Subsystem sftp /usr/lib/openssh/sftp-server
 SSHD
 
     # ─── Create login banner ───────────────────────────────────────────────────
+    # Why: A warning banner is legally required in many jurisdictions before prosecuting unauthorized access.
+    # What it does: Writes a standardized legal warning to /etc/ssh/banner which is shown before login.
     cat > /etc/ssh/banner << 'BANNER'
 
   ╔═══════════════════════════════════════════════════════════════╗
@@ -95,6 +103,8 @@ SSHD
 BANNER
 
     # ─── MOTD ─────────────────────────────────────────────────────────────────
+    # Why: Provides a post-login message to reinforce security policies.
+    # What it does: Replaces the Message of the Day file (/etc/motd) and optionally disables dynamic MOTD scripts.
     cat > /etc/motd << 'MOTD'
 
   Production Server — Unauthorized access strictly prohibited.
@@ -105,6 +115,8 @@ MOTD
     chmod -x /etc/update-motd.d/* 2>/dev/null || true
 
     # ─── Validate and restart sshd ────────────────────────────────────────────
+    # Why: Invalid SSH configurations will prevent the daemon from starting, locking administrators out.
+    # What it does: Tests the new configuration (sshd -t) and restarts the service only if valid; restores the backup otherwise.
     if sshd -t -f "$sshd_config"; then
         success "SSH configuration validated"
         systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null \
@@ -117,6 +129,8 @@ MOTD
     fi
 
     # ─── SSH client hardening ─────────────────────────────────────────────────
+    # Why: Secures outgoing SSH connections made from this server and keeps idle connections alive to prevent dropouts.
+    # What it does: Creates a secure system-wide SSH client configuration /etc/ssh/ssh_config.
     cat > /etc/ssh/ssh_config << 'SSH_CLIENT'
 Host *
     ServerAliveInterval 120

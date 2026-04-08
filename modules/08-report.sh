@@ -11,6 +11,8 @@ module_report() {
     local fail=0
 
     # Helper function: Check if command succeeds and print its description
+    # Why: DRY (Don't Repeat Yourself) principle. Condenses testing system states into readable 1-liners.
+    # What it does: Runs 'cmd' passed as a string, and increments a counter based on whether it exits 0 (success) or >0 (fail).
     _check() {
         local desc="$1"     # Description of what we are checking
         local cmd="$2"      # Command to evaluate (returns 0 on success)
@@ -57,6 +59,12 @@ module_report() {
     _check "Verify root account is strictly locked"           "passwd -S root | grep -qE 'L|LK'"
     _check "Verify .ssh directory exists for admin user"      "[ -d '/home/${ADMIN_USER}/.ssh' ]"
     _check "Verify .ssh directory has secure 700 permissions" "stat -c '%a' '/home/${ADMIN_USER}/.ssh' | grep -q '700'"
+    
+    # Check Least Privilege Roles
+    _check "Verify application user exists"                   "id '${APP_USER}'"
+    _check "Verify application user has NO sudo access"       "! groups '${APP_USER}' | grep -q '\\bsudo\\b'"
+    _check "Verify database service admin exists"             "id '${DB_ADMIN_USER}'"
+    _check "Verify database admin has nologin shell"          "grep '^${DB_ADMIN_USER}:' /etc/passwd | grep -q '/usr/sbin/nologin'"
 
     echo ""
     echo -e "  ${CYAN}${BOLD}[ 03 - SSH Hardening ]${RESET}"
@@ -100,6 +108,8 @@ module_report() {
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
     # ─── Connection info ──────────────────────────────────────────────────────
+    # Why: Quickly instructs developers how to log in after the script completes.
+    # What it does: Fetches the public IP address via external APIs and prints out the final connection command alongside where secrets are kept.
     local public_ip
     public_ip=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null \
         || curl -s --max-time 5 https://ifconfig.me 2>/dev/null \
@@ -116,6 +126,8 @@ module_report() {
     echo ""
 
     # ─── Save setup report ────────────────────────────────────────────────────
+    # Why: Historical trace. Future administrators need to know when and how the server was bootstrapped.
+    # What it does: Dumps the summarized variables and outcomes into a restricted /root/vm-setup-report.txt file.
     local report_file="/root/vm-setup-report.txt"
     {
         echo "VM SETUP REPORT"
@@ -135,6 +147,8 @@ module_report() {
     success "Report saved to: $report_file"
 
     # ─── Slack / email notification ───────────────────────────────────────────
+    # Why: Teams administering multiple servers via CI/CD pipelines require automated callbacks when deployment finishes.
+    # What it does: Sends a formatted JSON payload containing server readiness explicitly to a mapped SLACK_WEBHOOK.
     if [[ -n "$SLACK_WEBHOOK" ]]; then
         curl -s -X POST "$SLACK_WEBHOOK" \
             -H 'Content-type: application/json' \

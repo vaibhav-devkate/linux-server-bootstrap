@@ -7,24 +7,34 @@ module_system_update() {
     section "SYSTEM UPDATE & BASE CONFIGURATION"
 
     # Set hostname
+    # Why: Network identification and keeping local logs/system references consistent.
+    # What it does: Sets the system hostname using hostnamectl and adds it to /etc/hosts so it resolves to localhost.
     info "Setting hostname to: ${HOSTNAME}"
     hostnamectl set-hostname "$HOSTNAME" || warn "Could not set hostname"
     echo "127.0.1.1  ${HOSTNAME}" >> /etc/hosts
 
     # Set timezone
+    # Why: Crucial for log correlation and scheduled tasks (cron jobs).
+    # What it does: Uses timedatectl to set the server timezone (or symlinks /etc/localtime as fallback).
     info "Setting timezone: ${TIMEZONE}"
     timedatectl set-timezone "$TIMEZONE" 2>/dev/null \
         || ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
 
     # Sync hardware clock
+    # Why: Ensures timestamps for logs and cryptographic operations are accurate.
+    # What it does: Enables Network Time Protocol (NTP) synchronization.
     timedatectl set-ntp true 2>/dev/null || true
 
     # Set locale
+    # Why: Prevents character encoding issues in terminal, scripts, and applications.
+    # What it does: Generates the specified locale and configures the LANG environment variable.
     info "Setting locale: ${LOCALE}"
     locale-gen "$LOCALE" 2>/dev/null || true
     update-locale LANG="$LOCALE" 2>/dev/null || true
 
     # Configure sysctl for production performance + security
+    # Why: Default kernel parameters are conservative. These adjustments optimize networking and harden against common network attacks.
+    # What it does: Writes a custom configuration to /etc/sysctl.d/ and applies it via sysctl -p.
     info "Applying kernel sysctl hardening..."
     cat > /etc/sysctl.d/99-vm-production.conf << 'SYSCTL'
 # ── Network Performance ────────────────────────────────────────────────
@@ -78,6 +88,8 @@ SYSCTL
     success "Kernel parameters applied"
 
     # Limits
+    # Why: Default limits are too low for production servers (leading to "too many open files" errors).
+    # What it does: Increases soft/hard limits for open files and processes via PAM limits.
     info "Configuring system limits..."
     cat > /etc/security/limits.d/99-production.conf << 'LIMITS'
 * soft nofile 1048576
@@ -89,6 +101,8 @@ root hard nofile 1048576
 LIMITS
 
     # Update apt & do full upgrade
+    # Why: Ensures the system starts with the latest security patches and bug fixes.
+    # What it does: Updates package indexes and applies upgrades non-interactively.
     info "Updating package lists..."
     apt-get update -qq
 
