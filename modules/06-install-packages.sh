@@ -17,36 +17,36 @@ module_install_packages() {
     # What it does: Reads environment variables and adds corresponding apt install commands to a parallel executor queue.
     [[ -n "$GROUP_CORE" ]] && \
         parallel_add "Core utilities     ($GROUP_CORE)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_CORE"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_CORE; ) 200>/var/lock/setup_apt.lock"
 
     [[ -n "$GROUP_SECURITY" ]] && \
         parallel_add "Security tools     ($GROUP_SECURITY)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_SECURITY"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_SECURITY; ) 200>/var/lock/setup_apt.lock"
 
     [[ -n "$GROUP_MONITORING" ]] && \
         parallel_add "Monitoring tools   ($GROUP_MONITORING)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_MONITORING"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_MONITORING; ) 200>/var/lock/setup_apt.lock"
 
     [[ -n "$GROUP_EXTRAS" ]] && \
         parallel_add "Extra utilities    ($GROUP_EXTRAS)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_EXTRAS"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_EXTRAS; ) 200>/var/lock/setup_apt.lock"
 
     [[ -n "$GROUP_DATABASE" ]] && \
         parallel_add "Database packages  ($GROUP_DATABASE)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_DATABASE"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_DATABASE; ) 200>/var/lock/setup_apt.lock"
 
     # ─── Docker installation ──────────────────────────────────────────────────
     # Why: Many modern applications are deployed via containers.
     # What it does: Triggers a dedicated function to install the Docker Engine officially from Docker repositories.
     if [[ "$INSTALL_DOCKER" == true ]]; then
         parallel_add "Docker Engine" \
-            "_install_docker_engine"
+            "( flock 200; _install_docker_engine; ) 200>/var/lock/setup_apt.lock"
     fi
 
     # ─── Runtime (Node, Python) ───────────────────────────────────────────────
     [[ -n "$GROUP_RUNTIME" ]] && \
         parallel_add "Runtime (Node/Python)" \
-            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_RUNTIME"
+            "( flock 200; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $GROUP_RUNTIME; ) 200>/var/lock/setup_apt.lock"
 
     # Wait for all parallel jobs to finish
     parallel_wait
