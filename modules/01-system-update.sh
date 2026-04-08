@@ -103,6 +103,13 @@ LIMITS
     # Update apt & do full upgrade
     # Why: Ensures the system starts with the latest security patches and bug fixes.
     # What it does: Updates package indexes and applies upgrades non-interactively.
+    # Fix potential conflicting Docker repository keys from previous aborted runs
+    # Why: If the script previously generated a duplicate repo with different keys, apt-get update will fatal error here.
+    if [[ "$INSTALL_DOCKER" == true ]]; then
+        rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.sources
+        rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
+    fi
+
     info "Updating package lists..."
     apt-get update -qq
 
