@@ -36,7 +36,8 @@ module_user_management() {
         useradd \
             --create-home \
             --shell "$ADMIN_SHELL" \
-            --groups "$ADMIN_GROUP,sudo" \
+            --gid "$ADMIN_GROUP" \
+            --groups "sudo" \
             --comment "Admin user managed by vm-setup" \
             "$ADMIN_USER"
         success "Created user: $ADMIN_USER"
@@ -184,7 +185,7 @@ VIMRC
         useradd \
             --create-home \
             --shell /bin/bash \
-            --groups "$APP_GROUP" \
+            --gid "$APP_GROUP" \
             --comment "Application execution user" \
             "$APP_USER"
         success "Created user: $APP_USER"
@@ -204,7 +205,7 @@ VIMRC
         useradd \
             --system \
             --shell /usr/sbin/nologin \
-            --groups "$DB_ADMIN_GROUP" \
+            --gid "$DB_ADMIN_GROUP" \
             --comment "Database service administration user" \
             "$DB_ADMIN_USER"
         success "Created user: $DB_ADMIN_USER"
