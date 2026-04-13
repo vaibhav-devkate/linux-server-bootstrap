@@ -16,7 +16,7 @@
 #     sudo ./setup.sh [OPTIONS]
 #
 #   Options:
-#     --config <file>      Path to config file (default: ./config/vm-config.env)
+#     --config <file>      Path to config file (default: ./config.env)
 #     --ssh-key <pubkey>   SSH public key string to add
 #     --skip-update        Skip system update step
 #     --skip-packages      Skip package installation step
@@ -40,7 +40,7 @@ source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/parallel.sh"
 
 # ── Default options ───────────────────────────────────────────────────────────
-CONFIG_FILE="${SCRIPT_DIR}/config/config.env"
+CONFIG_FILE="${SCRIPT_DIR}/config.env"
 SKIP_UPDATE=false
 SKIP_PACKAGES=false
 SKIP_SECURITY=false
@@ -75,7 +75,7 @@ _print_help() {
     echo -e "${BOLD}Usage:${RESET}  sudo ./setup.sh [OPTIONS]"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
-    echo "  --config <file>      Config file path (default: ./config/config.env)"
+    echo "  --config <file>      Config file path (default: ./config.env)"
     echo "  --ssh-key <key>      SSH public key to add to admin user"
     echo "  --skip-update        Skip OS update step"
     echo "  --skip-packages      Skip package installation"
@@ -110,7 +110,7 @@ preflight() {
 
     # Load config file
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        fatal "Config file not found: $CONFIG_FILE\n  Copy config/config.env and edit it"
+        fatal "Config file not found: $CONFIG_FILE\n  Create or copy config.env and edit it"
     fi
 
     # Prompt user to edit the config file if not in AUTO_YES mode

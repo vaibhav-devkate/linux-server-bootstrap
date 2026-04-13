@@ -163,7 +163,13 @@ _install_nvm() {
             export HOME=/home/${ADMIN_USER}
             curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v${nvm_version}/install.sh \
                 | PROFILE=/dev/null bash
-        " 2>/dev/null && success "NVM installed for $ADMIN_USER" \
+            export NVM_DIR=\"/home/${ADMIN_USER}/.nvm\"
+            [ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\"
+            nvm install --lts
+            nvm use --lts
+            nvm alias default 'lts/*'
+            npm install -g pm2
+        " 2>/dev/null && success "NVM, Node LTS, and PM2 installed for $ADMIN_USER" \
           || warn "NVM install failed (optional) — install manually"
     fi
 }
