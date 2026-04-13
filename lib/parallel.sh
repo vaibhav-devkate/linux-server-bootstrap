@@ -10,7 +10,7 @@ PARALLEL_NAMES=()
 
 # Initialize parallel job tracking
 parallel_init() {
-    PARALLEL_STATUS_DIR=$(mktemp -d /tmp/vm-setup-parallel.XXXXXX)
+    PARALLEL_STATUS_DIR=$(mktemp -d /run/vm-setup-parallel.XXXXXX)
     PARALLEL_JOBS=()
     PARALLEL_NAMES=()
 }
@@ -55,7 +55,7 @@ parallel_wait() {
         for id in "${!PARALLEL_JOBS[@]}"; do
             local status_file="$PARALLEL_STATUS_DIR/job_${id}.status"
             local status; status=$(cat "$status_file" 2>/dev/null || echo "RUNNING")
-            if [[ "$status" != "RUNNING" ]]; then
+            if [[ "$status" == "SUCCESS" || "$status" == "FAILED" ]]; then
                 done_count=$((done_count + 1))
             fi
         done
